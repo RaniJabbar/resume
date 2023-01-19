@@ -1,0 +1,261 @@
+#
+#
+#
+# Rani Jabbar
+# 825473162
+# Term Project
+
+
+from PyQt5.QtWidgets import *
+from PyQt5.QtGui import QPixmap
+from PyQt5 import uic
+import pandas as pd
+
+class UpdateUser(QMainWindow):
+
+    def __init__(self, update_id, parent):
+        super(UpdateUser, self).__init__()
+        uic.loadUi('userupdate.ui', self)
+        self.df_users = pd.read_excel('users.xlsx', sheet_name='users')
+        self.parent = parent
+        self.id = update_id
+        self.user = self.df_users.loc[self.df_users.id == self.id].reset_index()
+        self.le_username.setText(str(self.user.username[0]))
+        self.le_password.setText(str(self.user.password[0]))
+
+        self.btn_update.clicked.connect(self.update)
+
+        self.show()
+
+    def update(self):
+        username = self.le_username.text()
+        password = self.le_password.text()
+        self.df_users.loc[self.df_users.id == self.id, ['username', 'password']] = [username, password]
+        self.df_users.to_excel('users.xlsx', sheet_name='users', index=False)
+        self.parent.load_users_data()
+        self.close()
+
+
+class UserManagement(QMainWindow):
+
+    def __init__(self, parent):
+        super(UserManagement, self).__init__()
+        uic.loadUi('user_management.ui', self)
+        self.parent = parent
+        self.row_length = 6
+
+        self.btn_create.clicked.connect(self.create_user)
+        self.btn_delete.clicked.connect(self.delete_user)
+        self.btn_update.clicked.connect(self.update_user)
+
+        self.show()
+        self.load_user_data()
+
+    def load_user_data(self):
+        self.df_users = pd.read_excel('users.xlsx', sheet_name='users')
+        self.label.setText(self.df_users.to_string())
+        self.label.adjustSize()
+
+    def create_user(self):
+        self.createuser = CreateUser(self)
+
+    def delete_user(self):
+        mb = QMessageBox()
+        mb.setWindowTitle('Input ID of User')
+        mb.setText('That ID will be deleted!')
+        mb.line = QLineEdit(self)
+        mb.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        res = mb.exec()
+        if res == QMessageBox.Ok:
+            self.df_users = self.df_users[self.df_users.id != int(self.le_delete.text())]
+            self.df_users.to_excel('users.xlsx', sheet_name='users', index=False)
+            self.close()
+
+    def update_user(self):
+        update_id = int(self.le_update.text())
+        print(update_id)
+        self.sendtoupdate = UpdateUser(update_id, self)
+
+
+class ShowBook(QMainWindow):
+
+    def __init__(self, id, userid, parent):
+        super(ShowBook, self).__init__()
+        uic.loadUi('show_book.ui', self)
+        self.id = id
+        self.parent = parent
+        self.userid = userid
+        self.df_books = pd.read_excel('books.xlsx', sheet_name='books')
+
+        self.book = self.df_books.loc[self.df_books.isbn == id].reset_index()
+        self.l_bookname.setText(str(self.book.name[0]))
+        self.l_price.setText(str(self.book.price[0]))
+        self.l_isbn.setText(str(self.book.isbn[0]))
+
+        self.photo_path = str(self.book.cover[0])
+        self.lbl_photo.setPixmap(QPixmap(self.photo_path))
+        self.lbl_photo.setFixedWidth(150)
+        self.lbl_photo.setFixedWidth(225)
+
+        self.btn_edit.hide()
+        self.btn_delete.hide()
+        self.newname.hide()
+        self.newprice.hide()
+        self.newisbn.hide()
+
+        if userid == 1:
+            self.btn_edit.show()
+            self.btn_delete.show()
+            self.newname.show()
+            self.newprice.show()
+            self.newisbn.show()
+
+        self.btn_edit.clicked.connect(self.edit)
+        self.btn_delete.clicked.connect(self.delete)
+
+        self.show()
+
+    def edit(self):
+        name = self.newname.text()
+        price = self.newprice.text()
+        isbn = self.newisbn.text()
+        self.df_books.loc[self.df_books.isbn == self.id, ['isbn', 'name', 'price']] = [isbn, name, price]
+        self.df_books.to_excel('books.xlsx', sheet_name='books', index=False)
+        self.parent.load_book_data()
+        self.close()
+
+    def delete(self):
+        mb = QMessageBox()
+        mb.setWindowTitle('Are you certain?')
+        mb.setText('The book will be deleted!')
+        mb.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        res = mb.exec()
+        if res == QMessageBox.Ok:
+            self.df_books = self.df_books[self.df_books.isbn != self.id]
+            self.df_books.to_excel('books.xlsx', sheet_name='books', index=False)
+            self.close()
+            self.parent.load_users_data()
+
+
+class Library(QMainWindow):
+
+    def __init__(self, userid, parent):
+        super(Library, self).__init__()
+        uic.loadUi('library.ui', self)
+        self.row_length = 6
+        self.userid = userid
+
+        self.btn_userman.hide()
+        if userid == 1:
+            self.btn_userman.show()
+
+        self.btn_userman.clicked.connect(self.userman)
+        self.show()
+
+        self.load_book_data()
+
+    def load_book_data(self):
+        while self.layout_books.count():
+            self.layout_books.itemAt(0).widget().setParent(None)
+        self.df_books = pd.read_excel('books.xlsx', sheet_name='books')
+        row_index = -1
+        for i in range(len(self.df_books)):
+            column_index = i % self.row_length
+            if column_index == 0:
+                row_index += 1
+
+            book = QLabel()
+            book.setPixmap(QPixmap(self.df_books.cover[i]))
+            book.setScaledContents(True)
+            book.setFixedWidth(150)
+            book.setFixedHeight(250)
+            book.mousePressEvent = lambda e, id = self.df_books.isbn[i]: self.show_book(id, self.userid)
+            self.layout_books.addWidget(book, row_index, column_index)
+
+    def show_book(self, id, userid):
+        self.show_book_gui = ShowBook(id, userid, self)
+
+    def userman(self):
+        self.show_user_management = UserManagement(self)
+
+
+class Login(QMainWindow):
+
+    def __init__(self, parent):
+        super(Login, self).__init__()
+        uic.loadUi('userpass.ui', self)
+        self.parent = parent
+        self.df_users = pd.read_excel('users.xlsx', sheet_name='users')
+        self.user = self.df_users.loc[self.df_users.id == id].reset_index()
+
+        self.btn_log_in.clicked.connect(self.loginbtn)
+
+        self.show()
+
+    def loginbtn(self):
+        self.df_users = pd.read_excel('users.xlsx', sheet_name='users')
+        usernames = self.df_users['username']
+        passwords = self.df_users['password']
+        for i in range(len(usernames)):
+            if (self.le_username.text() == usernames[i]) and (self.le_password.text() == passwords[i]):
+                userid = i+1
+                self.show_library = Library(userid, self)
+                self.close()
+                break
+            else:
+                self.l_invalid.setText('Username or Password is Incorrect')
+
+class CreateUser(QMainWindow):
+
+    def __init__(self, parent):
+        super(CreateUser, self).__init__()
+        uic.loadUi('createuser.ui', self)
+        self.parent = parent
+        self.df_users = pd.read_excel('users.xlsx', sheet_name='users')
+        self.user = self.df_users.loc[self.df_users.id == id].reset_index()
+
+        self.pb_create.clicked.connect(self.usercreation)
+
+        self.show()
+
+    def usercreation(self):
+        self.df_users = pd.read_excel('users.xlsx', sheet_name='users')
+        usernames = self.df_users['username']
+        for i in range(len(self.df_users)):
+            if self.le_username.text() == usernames[i]:
+                self.l_invalid2.setText('Username already taken')
+                break
+            elif self.le_password.text() == '':
+                self.l_invalid2.setText('Password box cannot be empty!')
+            elif i == (len(usernames) - 1):
+                self.df_users.loc[len(self.df_users)] = [i+2, self.le_username.text(), self.le_password.text()]
+                self.df_users.to_excel('users.xlsx', sheet_name='users', index=False)
+                self.close()
+                self.parent.load_user_data()
+
+
+class LoginMenu(QMainWindow):
+
+    def __init__(self):
+        super(LoginMenu, self).__init__()
+        uic.loadUi('login.ui', self)
+        self.row_length = 2
+        self.show()
+
+        self.btn_login.clicked.connect(self.login)
+        self.btn_newuser.clicked.connect(self.create)
+
+    def login(self):
+        self.show_login = Login(self)
+        self.close()
+
+    def create(self):
+        self.show_create = CreateUser(self)
+
+    def load_user_data(self):
+        pass
+
+
+app = QApplication([])
+window = LoginMenu()
+app.exec()
